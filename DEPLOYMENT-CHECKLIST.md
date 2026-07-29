@@ -15,3 +15,13 @@
 - [ ] Approve one test entry
 - [ ] Verify that it appears under Recent maintenance entries
 - [ ] Use Export to create a backup
+
+## v0.4 update verification
+
+- [ ] Press Ctrl+F5 after Cloudflare finishes deploying
+- [ ] Test `bad cables` and confirm it becomes one or two technical sentences
+- [ ] Type part of a previously approved Issue and confirm a strong match refills Reason and Work performed
+- [ ] Select a suggestion and confirm Step 1 is refilled
+- [ ] Select a machine type under Approved Knowledge
+- [ ] Select **Use in Step 1** and confirm Machine, Issue, Reason, and Work performed are refilled
+- [ ] Confirm Results is not automatically marked as verified

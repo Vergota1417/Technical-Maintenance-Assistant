@@ -1,4 +1,4 @@
-const CACHE = "maintenance-assistant-v3";
+const CACHE = "maintenance-assistant-v4";
 const SHELL = ["./", "./styles.css", "./app.js", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

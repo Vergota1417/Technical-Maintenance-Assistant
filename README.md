@@ -1,4 +1,4 @@
-# Technical Maintenance Assistant — Cloudflare Edition
+# Technical Maintenance Assistant — Cloudflare Edition v0.4
 
 This version removes **Render** and **OpenAI API billing**.
 
@@ -22,7 +22,10 @@ It uses:
 - Generates a Results statement only when machine operation is confirmed
 - Blocks lot, batch, recall, patient, customer, product identifier, quantity, and quality-disposition information
 - Saves only records the technician reviews and approves
+- Expands very short notes into one or two manager-friendly technical sentences
 - Suggests similar approved repairs while the user types
+- Automatically refills Reason and Work performed when a strong approved match is found
+- Lets the user select a machine type in the Approved Knowledge section and reuse repeated records in Step 1
 - Exports all approved records as JSON for backup
 
 ## Project organization
@@ -178,6 +181,33 @@ Results: Machine is running as intended.
 
 Review the wording and select **Approve and save**. That approved entry then becomes available in future suggestions.
 
+## Reusing repeated maintenance records
+
+At the bottom of the application, use **Select machine type** to filter approved entries. Choose **Use in Step 1** on a record to refill:
+
+- Machine or equipment
+- Issue
+- Confirmed reason
+- Work performed
+
+The Results checkbox is intentionally not selected automatically. Verify the current repair before confirming Results.
+
+While typing an Issue, a strong approved match can also refill Reason and Work performed automatically. A blue notice identifies the source record so the technician can verify it before generating or approving.
+
+## Short-note expansion
+
+Examples:
+
+```text
+bad cables
+→ One or more equipment cables were not providing a reliable electrical connection. This created an unstable electrical path within the affected machine circuit.
+
+bad encoder
+→ The encoder was not providing reliable position feedback to the control system. The controller could not consistently verify the associated machine position or movement.
+```
+
+The assistant may explain the normal technical function of a named component, but it will not invent a root cause, repair, or successful test result.
+
 ---
 
 # Command-line setup alternative
@@ -246,3 +276,13 @@ The included tests cover:
 - Similar-record ranking
 - Workers AI response parsing
 - Prevention of invented fields
+
+
+## v0.4 behavior
+
+- Short notes are expanded into one or two complete technical sentences.
+- Weak AI answers that merely copy the technician's shorthand are replaced by the safe built-in expansion.
+- Strong live matches automatically refill Reason and Work performed from approved records.
+- Selecting a suggestion always refills its approved Reason and Work performed.
+- The Approved Knowledge section includes machine-type filtering and a **Use in Step 1** button.
+- The review screen identifies whether Cloudflare Workers AI or the built-in technical formatter generated the wording.

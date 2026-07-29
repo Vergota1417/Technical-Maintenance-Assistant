@@ -104,10 +104,15 @@ Return Issue, Reason, Work performed, and Results.
 Rules:
 - Correct spelling and grammar.
 - Rewrite vague technician shorthand into clear, manager-friendly technical language.
-- Do not merely repeat phrases such as "bad cables," "bad encoder," "bad sensor," "motor issue," "machine down," or "not working."
-- When only a component and a general failure word are supplied, describe the component's failed or unreliable normal function without inventing a specific cause.
-- Examples: "bad cables" means an equipment cable was not providing a reliable electrical connection; "bad encoder" means the encoder was not providing reliable position feedback; "bad sensor" means the sensor was not providing a reliable detection signal.
-- Keep each field to one sentence when possible and never more than two sentences.
+- Never merely copy a short note such as "bad cables," "bad encoder," "bad sensor," "motor issue," "machine down," or "not working."
+- When the Issue contains fewer than eight words, expand it into one or two complete technical sentences.
+- The first sentence must state the observed component or machine condition.
+- The second sentence may explain the affected technical function only when that function is inherent to the named component or directly supported by the technician's words.
+- When only a component and a general failure word are supplied, describe the component's failed or unreliable normal function without inventing a specific root cause.
+- Example: "bad cables" becomes "One or more equipment cables were not providing a reliable electrical connection. This created an unstable electrical path within the affected machine circuit."
+- Example: "bad encoder" becomes "The encoder was not providing reliable position feedback to the control system. The controller could not consistently verify the associated machine position or movement."
+- Improve short Reason and Work performed notes into complete technical sentences, but preserve exactly what was confirmed and never add an action or cause that was not supplied.
+- Keep each field to one or two complete sentences.
 - Never invent a root cause, repair, test, adjustment, production impact, or successful result.
 - If Reason was not supplied, return null.
 - If Work performed was not supplied, return null.
@@ -142,16 +147,33 @@ Rules:
   return enforceGeneratedOutput(parsed, input);
 }
 
-async function getRecords(env, limit = 12) {
+async function getRecords(env, limit = 12, machineName = "") {
   if (!env.DB) throw new Error("D1 binding is not configured");
   const safeLimit = Math.min(Math.max(Number(limit) || 12, 1), 250);
-  const result = await env.DB.prepare(`
+  const machine = normalizeWhitespace(machineName);
+  const baseSelect = `
     SELECT id, machine_name, raw_issue, issue, reason, work_performed, results,
            result_confirmed, selected_count, user_modified, created_at
     FROM maintenance_records
-    ORDER BY datetime(created_at) DESC, id DESC
-    LIMIT ?
-  `).bind(safeLimit).all();
+  `;
+  const statement = machine
+    ? env.DB.prepare(`${baseSelect} WHERE LOWER(TRIM(machine_name)) = LOWER(TRIM(?)) ORDER BY selected_count DESC, datetime(created_at) DESC, id DESC LIMIT ?`).bind(machine, safeLimit)
+    : env.DB.prepare(`${baseSelect} ORDER BY datetime(created_at) DESC, id DESC LIMIT ?`).bind(safeLimit);
+  const result = await statement.all();
+  return result.results || [];
+}
+
+async function getMachineTypes(env) {
+  if (!env.DB) throw new Error("D1 binding is not configured");
+  const result = await env.DB.prepare(`
+    SELECT TRIM(machine_name) AS machine_name,
+           COUNT(*) AS record_count,
+           COALESCE(SUM(selected_count), 0) AS selected_count
+    FROM maintenance_records
+    WHERE machine_name IS NOT NULL AND TRIM(machine_name) <> ''
+    GROUP BY LOWER(TRIM(machine_name))
+    ORDER BY record_count DESC, selected_count DESC, machine_name ASC
+  `).all();
   return result.results || [];
 }
 
@@ -210,9 +232,13 @@ async function handleSuggestions(request, env) {
   const query = normalizeWhitespace(url.searchParams.get("q"));
   const machine = normalizeWhitespace(url.searchParams.get("machine_name"));
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 5, 1), 20);
-  if (query.length < 2) return json([]);
+  if (query.length < 2 && !machine) return json([]);
 
-  const records = await getRecords(env, 250);
+  const records = await getRecords(env, 250, machine);
+  if (query.length < 2) {
+    return json(records.slice(0, limit).map((record) => ({ ...record, score: 100 })));
+  }
+
   const ranked = records
     .map((record) => ({ ...record, score: similarityScore(query, record, machine) }))
     .filter((record) => record.score >= 15)
@@ -225,7 +251,13 @@ async function handleListRecords(request, env) {
   const authError = requireAuthorized(request, env);
   if (authError) return authError;
   const url = new URL(request.url);
-  return json(await getRecords(env, url.searchParams.get("limit")));
+  return json(await getRecords(env, url.searchParams.get("limit"), url.searchParams.get("machine_name")));
+}
+
+async function handleMachineTypes(request, env) {
+  const authError = requireAuthorized(request, env);
+  if (authError) return authError;
+  return json(await getMachineTypes(env));
 }
 
 async function handleCreateRecord(request, env) {
@@ -306,6 +338,7 @@ async function routeApi(request, env) {
   if (path === "/api/suggestions" && request.method === "GET") return handleSuggestions(request, env);
   if (path === "/api/records" && request.method === "GET") return handleListRecords(request, env);
   if (path === "/api/records" && request.method === "POST") return handleCreateRecord(request, env);
+  if (path === "/api/machines" && request.method === "GET") return handleMachineTypes(request, env);
   if (path === "/api/export" && request.method === "GET") return handleExport(request, env);
   return json({ detail: "API route not found." }, 404);
 }
