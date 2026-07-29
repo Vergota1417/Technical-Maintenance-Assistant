@@ -233,6 +233,16 @@ function formatReason(raw, context = {}) {
     if (pattern.test(lower)) return ensurePeriod(replacement);
   }
 
+  const motorDriveWire = lower.match(/^(?:bad|faulty|failed|defective)\s+motor\s+(?:on|at|in)\s+(?:the\s+)?(?:driver|drive)\s+(?:with|and)\s+(?:a\s+)?(?:bad|faulty|failed|defective|damaged|broken)\s+(?:wire|cable|conductor)$/i);
+  if (motorDriveWire) {
+    return ensurePeriod("A motor fault and defective wiring were identified in the motor-to-drive electrical circuit.");
+  }
+
+  const driveWire = lower.match(/^(?:bad|faulty|failed|defective|damaged|broken)\s+(?:wire|cable|conductor)\s+(?:on|at|in)\s+(?:the\s+)?(?:driver|drive)$/i);
+  if (driveWire) {
+    return ensurePeriod("A defective conductor was identified at the motor-drive electrical connection.");
+  }
+
   const colorCableWire = lower.match(/^(?:bad|faulty|failed|defective|damaged|broken)\s+(?:wire|conductor)\s+(?:on|in|at)\s+(?:the\s+)?([a-z]+)\s+cable$/i);
   if (colorCableWire) {
     return ensurePeriod(`A defective conductor was identified in the ${colorCableWire[1]} cable${terminalLocation}.`);
@@ -379,8 +389,15 @@ export function enforceGeneratedOutput(output, input) {
 
   let reason = output.reason ? ensurePeriod(output.reason) : null;
   let workPerformed = output.work_performed ? ensurePeriod(output.work_performed) : null;
-  if (input.reason && reason && looksUnhelpfullyVague(reason, input.reason)) reason = formatReason(input.reason, input);
-  if (input.work_performed && workPerformed && looksUnhelpfullyVague(workPerformed, input.work_performed)) workPerformed = formatWork(input.work_performed);
+
+  // Technician-confirmed fields are the source of truth. The AI may rewrite
+  // them, but it must never erase them by returning null or an empty value.
+  if (input.reason && (!reason || looksUnhelpfullyVague(reason, input.reason))) {
+    reason = formatReason(input.reason, input);
+  }
+  if (input.work_performed && (!workPerformed || looksUnhelpfullyVague(workPerformed, input.work_performed))) {
+    workPerformed = formatWork(input.work_performed);
+  }
 
   const cleaned = {
     issue,

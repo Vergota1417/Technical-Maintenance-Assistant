@@ -138,6 +138,9 @@ Rules:
 - Improve short Reason and Work performed notes into complete technical sentences, but preserve exactly what was confirmed and never add an action or cause that was not supplied.
 - Keep each field to one or two complete sentences.
 - Never invent a root cause, repair, test, adjustment, production impact, or successful result.
+- If confirmed_reason is non-null, Reason MUST be non-null and must rewrite that confirmed fact into a complete technical sentence.
+- If confirmed_work_performed is non-null, Work performed MUST be non-null and must rewrite that confirmed action into a complete technical sentence.
+- Never decide that a supplied confirmed field is unconfirmed, and never discard supplied technician facts.
 - If Reason was not supplied, return null.
 - If Work performed was not supplied, return null.
 - If machine operation was not confirmed, Results must be null.

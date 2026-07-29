@@ -174,3 +174,48 @@ test("AI parser extracts JSON even when the model adds surrounding text", () => 
   });
   assert.equal(parsed.issue, "Corrected issue.");
 });
+
+test("AI cannot discard a technician-confirmed reason by returning null", () => {
+  const output = enforceGeneratedOutput({
+    issue: "The machine was not returning to its home position as required.",
+    reason: null,
+    work_performed: "Removed the existing motor and encoder cable and installed replacement assemblies.",
+    results: "The machine is now operating as expected.",
+    missing_information: ["reason"],
+    prohibited_information_detected: false,
+  }, {
+    machine_name: "YK2",
+    issue: "machine not resting",
+    reason: "bad motor on driver with bad wire",
+    work_performed: "replaced motor and encoder cable",
+    result_confirmed: true,
+    result_notes: "machine running",
+  });
+
+  assert.equal(
+    output.reason,
+    "A motor fault and defective wiring were identified in the motor-to-drive electrical circuit.",
+  );
+  assert.ok(!output.missing_information.includes("reason"));
+});
+
+test("AI cannot discard confirmed work performed by returning null", () => {
+  const output = enforceGeneratedOutput({
+    issue: "The encoder was not providing reliable position feedback.",
+    reason: "The encoder cable was damaged.",
+    work_performed: null,
+    results: null,
+    missing_information: ["work_performed", "results"],
+    prohibited_information_detected: false,
+  }, {
+    machine_name: "Indexing machine",
+    issue: "bad encoder",
+    reason: "damaged encoder cable",
+    work_performed: "replaced encoder",
+    result_confirmed: false,
+    result_notes: "",
+  });
+
+  assert.equal(output.work_performed, "Removed the failed encoder and installed a replacement unit.");
+  assert.ok(!output.missing_information.includes("work_performed"));
+});

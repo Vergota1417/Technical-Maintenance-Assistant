@@ -16,7 +16,7 @@
 - [ ] Verify that it appears under Recent maintenance entries
 - [ ] Use Export to create a backup
 
-## v0.5 update verification
+## v0.6 update verification
 
 - [ ] Press Ctrl+F5 after Cloudflare finishes deploying
 - [ ] Test `bad cables` and confirm it becomes one or two technical sentences
@@ -26,7 +26,7 @@
 - [ ] Select **Use in Step 1** and confirm Machine, Issue, Reason, and Work performed are refilled
 - [ ] Confirm Results is not automatically marked as verified
 
-## v0.5 AI and wording test
+## v0.6 AI and wording test
 
 - [ ] Enter Machine: `Conveyor`
 - [ ] Enter Issue: `bad motor on u connection`
@@ -38,3 +38,11 @@
 - [ ] Confirm Issue, Reason, and Work performed are expanded into complete technical sentences
 - [ ] Confirm Results remains blank
 - [ ] Confirm the review message says Cloudflare Workers AI was used; if it still shows fallback, open Cloudflare Live Logs and inspect the `AI fallback:` message
+
+## v0.6 confirmed-field preservation test
+
+- [ ] Enter Reason: `bad motor on driver with bad wire`
+- [ ] Enter Work performed: `replaced motor and encoder cable`
+- [ ] Generate the record
+- [ ] Confirm Reason is populated instead of showing `Reason was not confirmed`
+- [ ] Confirm Work performed remains populated even if the AI omits it

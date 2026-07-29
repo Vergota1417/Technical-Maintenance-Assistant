@@ -1,4 +1,4 @@
-# Technical Maintenance Assistant — Cloudflare Edition v0.5
+# Technical Maintenance Assistant — Cloudflare Edition v0.6
 
 This version removes **Render** and **OpenAI API billing**.
 
@@ -278,7 +278,7 @@ The included tests cover:
 - Prevention of invented fields
 
 
-## v0.5 behavior
+## v0.6 behavior
 
 - Short notes are expanded into one or two complete technical sentences.
 - Weak AI answers that merely copy the technician's shorthand are replaced by the safe built-in expansion.
@@ -287,16 +287,15 @@ The included tests cover:
 - The Approved Knowledge section includes machine-type filtering and a **Use in Step 1** button.
 - The review screen identifies whether Cloudflare Workers AI or the built-in technical formatter generated the wording.
 
-## v0.5 corrections
+## v0.6 corrections
 
-- Stops sending JSON Schema mode to `@cf/zai-org/glm-4.7-flash`, because that model is not currently listed by Cloudflare as a JSON Mode model.
-- Keeps GLM-4.7-Flash as the default free model and requests a strict JSON object through the prompt instead.
-- Extracts valid JSON even if the model adds a short line before or after the object.
-- Corrects additional maintenance spelling errors, including common misspellings of `complete`, `replaced`, `cable`, `connection`, and `motor`.
-- Uses all confirmed fields together so a short entry such as `bad motor on U connection` is not reduced to a generic motor statement.
-- Expands short Reason and Work performed notes into manager-friendly technical sentences.
+- Treats technician-entered Reason and Work performed as confirmed source facts.
+- If the AI returns `null` for a confirmed field, the application restores and technically rewrites the technician's entry instead of displaying it as missing.
+- Adds explicit AI instructions that supplied confirmed fields must never be discarded.
+- Improves motor-to-drive wiring wording for short reason notes.
+- Keeps the model and Cloudflare binding configuration already present in your repository.
 
-Expected v0.5 example:
+Expected v0.6 example:
 
 ```text
 Machine: Conveyor
