@@ -4,10 +4,6 @@ const state = {
   selectedRecordId: null,
   lastRawIssue: "",
   generatedSnapshot: null,
-  autoFilledReason: "",
-  autoFilledWork: "",
-  lastAutoFillSignature: "",
-  machineTypes: [],
 };
 
 const el = (id) => document.getElementById(id);
@@ -64,113 +60,35 @@ function debounce(fn, delay = 300) {
   };
 }
 
-function normalize(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function showMatchNotice(record, source = "approved match") {
-  const parts = [];
-  if (record.reason) parts.push("Reason");
-  if (record.work_performed) parts.push("Work performed");
-  const filled = parts.length ? parts.join(" and ") : "The Step 1 fields";
-  const verb = parts.length === 1 ? "was" : "were";
-  setAlert(
-    "matchNotice",
-    `${filled} ${verb} filled from ${source} #${record.id}. Verify the facts before generating or approving the record.`,
-  );
-}
-
 async function checkHealth() {
   try {
     const health = await api("/api/health");
     const badge = el("connectionBadge");
     if (health.ai_configured) {
-      badge.textContent = health.storage_configured ? "Ready · Free AI" : "Database setup required";
+      badge.textContent = health.storage_configured ? `Ready · Free AI` : "Database setup required";
       badge.className = health.storage_configured ? "badge good" : "badge bad";
     } else {
       badge.textContent = "Technical formatter ready";
       badge.className = "badge bad";
     }
     if (health.access_key_required && !localStorage.getItem("maintenanceAppKey")) show("accessKeyWrap", true);
-  } catch {
+  } catch (error) {
     el("connectionBadge").textContent = "Cloudflare unavailable";
     el("connectionBadge").className = "badge bad";
   }
 }
 
-function canReplaceAutoFilled(field, priorValue) {
-  const current = field.value.trim();
-  return !current || current === priorValue;
-}
-
-function applyRecordToStepOne(record, { replaceIssue = true, source = "approved record", scroll = false } = {}) {
-  state.selectedRecordId = record.id;
-
-  if (record.machine_name) fields.machine.value = record.machine_name;
-  if (replaceIssue && record.issue) fields.issue.value = record.issue;
-
-  fields.reason.value = record.reason || "";
-  fields.work.value = record.work_performed || "";
-  state.autoFilledReason = record.reason || "";
-  state.autoFilledWork = record.work_performed || "";
-
-  const filter = el("historyMachineFilter");
-  if (record.machine_name && [...filter.options].some((option) => normalize(option.value) === normalize(record.machine_name))) {
-    filter.value = [...filter.options].find((option) => normalize(option.value) === normalize(record.machine_name)).value;
-  }
-
-  show("suggestions", false);
-  showMatchNotice(record, source);
-
-  if (scroll) {
-    document.querySelector(".input-card").scrollIntoView({ behavior: "smooth", block: "start" });
-    fields.issue.focus();
-  }
-}
-
-function maybeAutoFillBestMatch(items, query) {
-  if (!items.length || query.length < 3) return;
-  const best = items[0];
-  const score = Number(best.score) || 0;
-  if (score < 58 || (!best.reason && !best.work_performed)) return;
-
-  const signature = `${best.id}|${normalize(query)}|${normalize(fields.machine.value)}`;
-  if (signature === state.lastAutoFillSignature) return;
-
-  let filled = false;
-  if (best.reason && canReplaceAutoFilled(fields.reason, state.autoFilledReason)) {
-    fields.reason.value = best.reason;
-    state.autoFilledReason = best.reason;
-    filled = true;
-  }
-  if (best.work_performed && canReplaceAutoFilled(fields.work, state.autoFilledWork)) {
-    fields.work.value = best.work_performed;
-    state.autoFilledWork = best.work_performed;
-    filled = true;
-  }
-
-  if (filled) {
-    state.selectedRecordId = best.id;
-    state.lastAutoFillSignature = signature;
-    showMatchNotice(best, `${Math.round(score)}% approved match`);
-  }
-}
-
 async function loadSuggestions() {
   const query = fields.issue.value.trim();
-  const machine = fields.machine.value.trim();
-  if (query.length < 2 && !machine) {
+  if (query.length < 3) {
     show("suggestions", false);
     return;
   }
-
   try {
-    const params = new URLSearchParams({ limit: "6" });
-    if (query) params.set("q", query);
-    if (machine) params.set("machine_name", machine);
+    const params = new URLSearchParams({ q: query, limit: "5" });
+    if (fields.machine.value.trim()) params.set("machine_name", fields.machine.value.trim());
     const suggestions = await api(`/api/suggestions?${params.toString()}`);
     renderSuggestions(suggestions);
-    if (query.length >= 3) maybeAutoFillBestMatch(suggestions, query);
   } catch (error) {
     if (error.status === 401) show("accessKeyWrap", true);
     show("suggestions", false);
@@ -184,7 +102,6 @@ function renderSuggestions(items) {
     show("suggestions", false);
     return;
   }
-
   items.forEach((item) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -192,21 +109,25 @@ function renderSuggestions(items) {
     button.setAttribute("role", "option");
     button.innerHTML = `
       <span class="suggestion-title"></span>
-      <span class="suggestion-detail"></span>
       <span class="suggestion-meta">
         <span>${item.machine_name || "Unspecified machine"}</span>
         <span>${Math.round(item.score)}% match</span>
         <span>Selected ${item.selected_count} times</span>
       </span>`;
     button.querySelector(".suggestion-title").textContent = item.issue;
-    const details = [item.reason ? `Reason: ${item.reason}` : "", item.work_performed ? `Work: ${item.work_performed}` : ""]
-      .filter(Boolean)
-      .join(" · ");
-    button.querySelector(".suggestion-detail").textContent = details;
-    button.addEventListener("click", () => applyRecordToStepOne(item, { replaceIssue: true, source: "selected suggestion" }));
+    button.addEventListener("click", () => selectSuggestion(item));
     box.appendChild(button);
   });
   show("suggestions", true);
+}
+
+function selectSuggestion(item) {
+  state.selectedRecordId = item.id;
+  fields.issue.value = item.issue || fields.issue.value;
+  if (!fields.machine.value && item.machine_name) fields.machine.value = item.machine_name;
+  if (!fields.reason.value && item.reason) fields.reason.value = item.reason;
+  if (!fields.work.value && item.work_performed) fields.work.value = item.work_performed;
+  show("suggestions", false);
 }
 
 function collectGeneratePayload() {
@@ -245,7 +166,7 @@ async function generate() {
     if (result.blocked) {
       setAlert(
         "policyAlert",
-        `This entry contains information outside the technical-maintenance scope: ${result.blocked_terms.join(", ")}. Remove it and keep required production or quality data in the authorized system.`,
+        `This entry contains information outside the technical-maintenance scope: ${result.blocked_terms.join(", ")}. Remove it and keep required production or quality data in the authorized system.`
       );
       return;
     }
@@ -265,12 +186,6 @@ async function generate() {
 }
 
 function renderOutput(result) {
-  const usedAI = result.generation_mode === "cloudflare-ai";
-  el("generationMode").textContent = usedAI
-    ? "Expanded and rewritten by Cloudflare Workers AI."
-    : "Expanded by the built-in technical formatter because Workers AI was unavailable.";
-  show("generationMode", true);
-
   el("issueOutput").value = result.issue || "";
   el("reasonOutput").value = result.reason || "";
   el("workOutput").value = result.work_performed || "";
@@ -353,7 +268,7 @@ async function approve() {
       body: JSON.stringify(payload),
     });
     setAlert("saveAlert", `Approved record #${record.id} was saved and can now improve future suggestions.`);
-    await Promise.all([loadMachineTypes(), loadHistory()]);
+    await loadHistory();
   } catch (error) {
     setAlert("errorAlert", error.message);
   } finally {
@@ -362,70 +277,30 @@ async function approve() {
   }
 }
 
-async function loadMachineTypes() {
-  try {
-    const machines = await api("/api/machines");
-    state.machineTypes = machines;
-
-    const datalist = el("machineTypes");
-    datalist.innerHTML = "";
-    machines.forEach((item) => {
-      const option = document.createElement("option");
-      option.value = item.machine_name;
-      option.label = `${item.record_count} approved record${item.record_count === 1 ? "" : "s"}`;
-      datalist.appendChild(option);
-    });
-
-    const filter = el("historyMachineFilter");
-    const current = filter.value;
-    filter.innerHTML = '<option value="">All machine types</option>';
-    machines.forEach((item) => {
-      const option = document.createElement("option");
-      option.value = item.machine_name;
-      option.textContent = `${item.machine_name} (${item.record_count})`;
-      filter.appendChild(option);
-    });
-    if ([...filter.options].some((option) => option.value === current)) filter.value = current;
-  } catch (error) {
-    if (error.status === 401) show("accessKeyWrap", true);
-  }
-}
-
 async function loadHistory() {
   const list = el("historyList");
   list.innerHTML = "<p>Loading approved entries…</p>";
   try {
-    const params = new URLSearchParams({ limit: "30" });
-    const machine = el("historyMachineFilter").value;
-    if (machine) params.set("machine_name", machine);
-    const records = await api(`/api/records?${params.toString()}`);
+    const records = await api("/api/records?limit=12");
     list.innerHTML = "";
     if (!records.length) {
-      list.innerHTML = "<p>No approved records were found for this machine type.</p>";
+      list.innerHTML = "<p>No approved records yet.</p>";
       return;
     }
-
     records.forEach((record) => {
       const card = document.createElement("article");
       card.className = "history-item";
       card.innerHTML = `
         <h3></h3>
         <p class="history-issue"></p>
-        <p class="history-reason"></p>
         <p class="history-work"></p>
-        <div class="history-meta"></div>
-        <button class="button secondary use-record" type="button">Use in Step 1</button>`;
+        <div class="history-meta"></div>`;
       card.querySelector("h3").textContent = record.machine_name || "Equipment record";
       card.querySelector(".history-issue").innerHTML = "<strong>Issue:</strong> ";
       card.querySelector(".history-issue").append(document.createTextNode(record.issue));
-      card.querySelector(".history-reason").innerHTML = "<strong>Reason:</strong> ";
-      card.querySelector(".history-reason").append(document.createTextNode(record.reason || "Not recorded"));
       card.querySelector(".history-work").innerHTML = "<strong>Work:</strong> ";
       card.querySelector(".history-work").append(document.createTextNode(record.work_performed || "Not recorded"));
       card.querySelector(".history-meta").textContent = `Record #${record.id} · Selected ${record.selected_count} times`;
-      card.querySelector(".use-record").addEventListener("click", () => {
-        applyRecordToStepOne(record, { replaceIssue: true, source: "machine-type library record", scroll: true });
-      });
       list.appendChild(card);
     });
   } catch (error) {
@@ -466,52 +341,22 @@ function clearForm() {
   state.selectedRecordId = null;
   state.lastRawIssue = "";
   state.generatedSnapshot = null;
-  state.autoFilledReason = "";
-  state.autoFilledWork = "";
-  state.lastAutoFillSignature = "";
   setAlert("errorAlert");
   setAlert("policyAlert");
   setAlert("saveAlert");
-  setAlert("matchNotice");
   show("suggestions", false);
   show("outputFields", false);
-  show("generationMode", false);
   show("emptyState", true);
   el("copyAllBtn").disabled = true;
 }
 
 fields.issue.addEventListener("input", debounce(loadSuggestions, 280));
-fields.machine.addEventListener("input", debounce(() => {
-  loadSuggestions();
-  const match = state.machineTypes.find((item) => normalize(item.machine_name) === normalize(fields.machine.value));
-  if (match) {
-    el("historyMachineFilter").value = match.machine_name;
-    loadHistory();
-  }
-}, 350));
-fields.reason.addEventListener("input", () => {
-  if (fields.reason.value.trim() !== state.autoFilledReason) state.autoFilledReason = "";
-});
-fields.work.addEventListener("input", () => {
-  if (fields.work.value.trim() !== state.autoFilledWork) state.autoFilledWork = "";
-});
+fields.machine.addEventListener("input", debounce(loadSuggestions, 350));
 fields.accessKey.addEventListener("change", () => {
   const key = fields.accessKey.value.trim();
   if (key) localStorage.setItem("maintenanceAppKey", key);
   else localStorage.removeItem("maintenanceAppKey");
-  Promise.all([loadMachineTypes(), loadHistory()]);
-});
-
-el("historyMachineFilter").addEventListener("change", () => {
-  const machine = el("historyMachineFilter").value;
-  if (machine) {
-    fields.machine.value = machine;
-    setAlert("libraryNotice", `Showing approved records for ${machine}. Select “Use in Step 1” to refill the Issue, Reason, and Work performed fields.`);
-  } else {
-    setAlert("libraryNotice", "Select a machine type to view its repeated approved repairs, then choose “Use in Step 1.”");
-  }
   loadHistory();
-  loadSuggestions();
 });
 
 document.addEventListener("click", (event) => {
@@ -521,7 +366,7 @@ document.addEventListener("click", (event) => {
 el("generateBtn").addEventListener("click", generate);
 el("approveBtn").addEventListener("click", approve);
 el("clearBtn").addEventListener("click", clearForm);
-el("refreshHistoryBtn").addEventListener("click", () => Promise.all([loadMachineTypes(), loadHistory()]));
+el("refreshHistoryBtn").addEventListener("click", loadHistory);
 el("exportBtn").addEventListener("click", exportRecords);
 el("copyAllBtn").addEventListener("click", (event) => copyText(combinedOutput(), event.currentTarget));
 
@@ -533,9 +378,8 @@ if (localStorage.getItem("maintenanceAppKey")) {
   fields.accessKey.value = localStorage.getItem("maintenanceAppKey");
 }
 
-setAlert("libraryNotice", "Select a machine type to view its repeated approved repairs, then choose “Use in Step 1.”");
 checkHealth();
-Promise.all([loadMachineTypes(), loadHistory()]);
+loadHistory();
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("./service-worker.js").catch(() => {});
