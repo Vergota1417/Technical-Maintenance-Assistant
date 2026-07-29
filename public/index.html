@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#123047">
+  <title>Technical Maintenance Assistant</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Equipment maintenance documentation</p>
+      <h1>Technical Maintenance Assistant</h1>
+    </div>
+    <div id="connectionBadge" class="badge neutral">Checking Cloudflare…</div>
+  </header>
+
+  <main class="layout">
+    <section class="card input-card" aria-labelledby="entry-heading">
+      <div class="section-heading">
+        <div>
+          <p class="step">Step 1</p>
+          <h2 id="entry-heading">Enter confirmed technical facts</h2>
+        </div>
+        <button id="clearBtn" class="button ghost" type="button">Clear</button>
+      </div>
+
+      <div id="accessKeyWrap" class="field hidden">
+        <label for="accessKey">Application access key</label>
+        <input id="accessKey" type="password" autocomplete="current-password" placeholder="Enter shared access key">
+      </div>
+
+      <div class="field">
+        <label for="machineName">Machine or equipment</label>
+        <input id="machineName" maxlength="120" placeholder="Example: Indexing machine">
+      </div>
+
+      <div class="field suggestion-anchor">
+        <label for="issueInput">Issue <span class="required">Required</span></label>
+        <textarea id="issueInput" rows="3" maxlength="800" placeholder="Example: index machine lost position on sleeving"></textarea>
+        <div id="suggestions" class="suggestions hidden" role="listbox" aria-label="Approved maintenance suggestions"></div>
+        <small>Suggestions come only from previously approved maintenance entries.</small>
+      </div>
+
+      <div class="field">
+        <label for="reasonInput">Confirmed reason</label>
+        <textarea id="reasonInput" rows="2" maxlength="800" placeholder="Leave blank when the cause is not confirmed"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="workInput">Work performed</label>
+        <textarea id="workInput" rows="3" maxlength="1200" placeholder="Describe only the work that was actually completed"></textarea>
+      </div>
+
+      <div class="result-confirmation">
+        <label class="check-row" for="resultConfirmed">
+          <input id="resultConfirmed" type="checkbox">
+          <span>
+            <strong>Machine operation was verified</strong>
+            <small>Check only after the technician confirms the result.</small>
+          </span>
+        </label>
+        <div class="field compact">
+          <label for="resultNotes">Optional result note</label>
+          <input id="resultNotes" maxlength="500" placeholder="Example: Tested through three complete cycles">
+        </div>
+      </div>
+
+      <div id="policyAlert" class="alert warning hidden" role="alert"></div>
+      <div id="errorAlert" class="alert error hidden" role="alert"></div>
+
+      <button id="generateBtn" class="button primary full" type="button">
+        Generate technical record
+      </button>
+    </section>
+
+    <section class="card output-card" aria-labelledby="output-heading">
+      <div class="section-heading">
+        <div>
+          <p class="step">Step 2</p>
+          <h2 id="output-heading">Review, copy, and approve</h2>
+        </div>
+        <button id="copyAllBtn" class="button secondary" type="button" disabled>Copy all</button>
+      </div>
+
+      <div id="emptyState" class="empty-state">
+        <div class="empty-icon">T</div>
+        <h3>Your four technical fields will appear here.</h3>
+        <p>The assistant will leave unknown information blank instead of inventing it.</p>
+      </div>
+
+      <div id="outputFields" class="output-fields hidden">
+        <article class="output-field">
+          <div class="output-label"><span>Issue</span><button class="copy-field" data-copy="issueOutput" type="button">Copy</button></div>
+          <textarea id="issueOutput" rows="3" maxlength="800"></textarea>
+        </article>
+
+        <article class="output-field">
+          <div class="output-label"><span>Reason</span><button class="copy-field" data-copy="reasonOutput" type="button">Copy</button></div>
+          <textarea id="reasonOutput" rows="3" maxlength="800"></textarea>
+          <p id="reasonMissing" class="missing hidden">Reason was not confirmed.</p>
+        </article>
+
+        <article class="output-field">
+          <div class="output-label"><span>Work performed</span><button class="copy-field" data-copy="workOutput" type="button">Copy</button></div>
+          <textarea id="workOutput" rows="3" maxlength="1200"></textarea>
+          <p id="workMissing" class="missing hidden">Work performed was not supplied.</p>
+        </article>
+
+        <article class="output-field">
+          <div class="output-label"><span>Results</span><button class="copy-field" data-copy="resultsOutput" type="button">Copy</button></div>
+          <textarea id="resultsOutput" rows="3" maxlength="500"></textarea>
+          <p id="resultsMissing" class="missing hidden">Results were not confirmed.</p>
+        </article>
+
+        <p class="review-note">Review every field before saving it as an approved example.</p>
+        <button id="approveBtn" class="button success full" type="button">Approve and save</button>
+        <div id="saveAlert" class="alert success-message hidden" role="status"></div>
+      </div>
+    </section>
+
+    <section class="card history-card" aria-labelledby="history-heading">
+      <div class="section-heading">
+        <div>
+          <p class="step">Approved knowledge</p>
+          <h2 id="history-heading">Recent maintenance entries</h2>
+        </div>
+        <div class="header-actions"><button id="exportBtn" class="button secondary" type="button">Export</button><button id="refreshHistoryBtn" class="button ghost" type="button">Refresh</button></div>
+      </div>
+      <div id="historyList" class="history-list"></div>
+    </section>
+  </main>
+
+  <footer>
+    Runs on Cloudflare Workers, D1, and the free Workers AI allocation. Use this assistant only for company-approved equipment-maintenance documentation. Required production and quality records must remain in their authorized systems.
+  </footer>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>
