@@ -16,7 +16,7 @@
     {
       "binding": "DB",
       "database_name": "maintenance-assistant-db",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "594daac4-ed05-4a95-968e-0318af74f823",
       "migrations_dir": "migrations"
     }
   ],
