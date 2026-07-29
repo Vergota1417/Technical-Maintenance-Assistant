@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   detectProhibitedInformation,
+  expandVagueIssue,
   enforceGeneratedOutput,
   fallbackGenerate,
   parseAIResult,
@@ -75,4 +76,101 @@ test("output enforcement does not allow invented fields", () => {
   assert.equal(output.reason, null);
   assert.equal(output.work_performed, null);
   assert.equal(output.results, null);
+});
+
+
+test("vague cable shorthand becomes manager-friendly technical language", () => {
+  const result = fallbackGenerate({
+    machine_name: "Indexing machine",
+    issue: "bad cables",
+    reason: "",
+    work_performed: "",
+    result_confirmed: false,
+    result_notes: "",
+  });
+  assert.equal(result.issue, "One or more equipment cables were not providing a reliable electrical connection. This created an unstable electrical path within the affected machine circuit.");
+});
+
+test("vague encoder shorthand describes the failed function", () => {
+  assert.equal(
+    expandVagueIssue("bad encoder"),
+    "The encoder was not providing reliable position feedback to the control system. The controller could not consistently verify the associated machine position or movement.",
+  );
+});
+
+test("weak AI wording is replaced by the safe technical expansion", () => {
+  const output = enforceGeneratedOutput({
+    issue: "Bad cables.",
+    reason: null,
+    work_performed: null,
+    results: null,
+    missing_information: [],
+    prohibited_information_detected: false,
+  }, {
+    machine_name: "Indexing machine",
+    issue: "bad cables",
+    reason: "",
+    work_performed: "",
+    result_confirmed: false,
+  });
+  assert.equal(output.issue, "One or more equipment cables were not providing a reliable electrical connection. This created an unstable electrical path within the affected machine circuit.");
+});
+
+
+test("short machine issue expands to two manager-friendly sentences", () => {
+  const result = fallbackGenerate({
+    machine_name: "Sleeving machine",
+    issue: "belt off",
+    reason: "",
+    work_performed: "",
+    result_confirmed: false,
+    result_notes: "",
+  });
+  assert.match(result.issue, /^Sleeving machine experienced the reported belt off condition\./);
+  assert.match(result.issue, /associated machine function\.$/);
+});
+
+test("short confirmed reason and work are expanded without adding unknown fields", () => {
+  const result = fallbackGenerate({
+    machine_name: "Indexing machine",
+    issue: "encoder fault",
+    reason: "loose cable",
+    work_performed: "replaced encoder",
+    result_confirmed: false,
+    result_notes: "",
+  });
+  assert.equal(result.reason, "A loose electrical connection caused an intermittent signal or power path.");
+  assert.equal(result.work_performed, "Removed the failed encoder and installed a replacement unit.");
+  assert.equal(result.results, null);
+});
+
+test("conveyor motor shorthand is rewritten using the confirmed U-terminal facts", () => {
+  const result = fallbackGenerate({
+    machine_name: "Conveyor",
+    issue: "bad motor on u connection",
+    reason: "bad wire on blue cable",
+    work_performed: "replaced compplette motor",
+    result_confirmed: false,
+    result_notes: "",
+  });
+  assert.equal(
+    result.issue,
+    "The conveyor motor was not operating as required, and the reported condition was associated with the U-terminal electrical connection. This prevented reliable motor operation during the machine cycle.",
+  );
+  assert.equal(
+    result.reason,
+    "A defective conductor was identified in the blue cable at the motor's U-terminal connection.",
+  );
+  assert.equal(
+    result.work_performed,
+    "Removed the existing motor and installed a complete replacement motor assembly.",
+  );
+  assert.equal(result.results, null);
+});
+
+test("AI parser extracts JSON even when the model adds surrounding text", () => {
+  const parsed = parseAIResult({
+    choices: [{ message: { content: 'Here is the record:\n{"issue":"Corrected issue.","reason":null,"work_performed":null,"results":null,"missing_information":["reason"],"prohibited_information_detected":false}\nDone.' } }],
+  });
+  assert.equal(parsed.issue, "Corrected issue.");
 });

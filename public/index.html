@@ -11,7 +11,7 @@
 <body>
   <header class="topbar">
     <div>
-      <p class="eyebrow">Equipment maintenance documentation</p>
+      <p class="eyebrow">Equipment maintenance documentation · v0.5</p>
       <h1>Technical Maintenance Assistant</h1>
     </div>
     <div id="connectionBadge" class="badge neutral">Checking Cloudflare…</div>
@@ -34,14 +34,16 @@
 
       <div class="field">
         <label for="machineName">Machine or equipment</label>
-        <input id="machineName" maxlength="120" placeholder="Example: Indexing machine">
+        <input id="machineName" list="machineTypes" maxlength="120" placeholder="Example: Indexing machine">
+        <datalist id="machineTypes"></datalist>
       </div>
 
       <div class="field suggestion-anchor">
         <label for="issueInput">Issue <span class="required">Required</span></label>
         <textarea id="issueInput" rows="3" maxlength="800" placeholder="Example: index machine lost position on sleeving"></textarea>
         <div id="suggestions" class="suggestions hidden" role="listbox" aria-label="Approved maintenance suggestions"></div>
-        <small>Suggestions come only from previously approved maintenance entries.</small>
+        <small>Suggestions come only from previously approved maintenance entries. A strong match can automatically fill Reason and Work performed for review.</small>
+        <div id="matchNotice" class="alert info hidden" role="status"></div>
       </div>
 
       <div class="field">
@@ -92,6 +94,7 @@
       </div>
 
       <div id="outputFields" class="output-fields hidden">
+        <p id="generationMode" class="review-note hidden" aria-live="polite"></p>
         <article class="output-field">
           <div class="output-label"><span>Issue</span><button class="copy-field" data-copy="issueOutput" type="button">Copy</button></div>
           <textarea id="issueOutput" rows="3" maxlength="800"></textarea>
@@ -128,6 +131,15 @@
           <h2 id="history-heading">Recent maintenance entries</h2>
         </div>
         <div class="header-actions"><button id="exportBtn" class="button secondary" type="button">Export</button><button id="refreshHistoryBtn" class="button ghost" type="button">Refresh</button></div>
+      </div>
+      <div class="machine-library-controls">
+        <div class="field compact">
+          <label for="historyMachineFilter">Select machine type</label>
+          <select id="historyMachineFilter">
+            <option value="">All machine types</option>
+          </select>
+        </div>
+        <div id="libraryNotice" class="alert info" role="status"></div>
       </div>
       <div id="historyList" class="history-list"></div>
     </section>
