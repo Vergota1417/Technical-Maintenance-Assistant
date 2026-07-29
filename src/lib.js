@@ -25,6 +25,18 @@ const COMMON_REPLACEMENTS = [
   [/\bsensoring\b/gi, "sensing"],
   [/\bwasnt\b/gi, "was not"],
   [/\bdidnt\b/gi, "did not"],
+  [/\bcom+p+l+e+t+e\b/gi, "complete"],
+  [/\bcomplette\b/gi, "complete"],
+  [/\bcompelte\b/gi, "complete"],
+  [/\bcomplte\b/gi, "complete"],
+  [/\breplased\b/gi, "replaced"],
+  [/\brepleced\b/gi, "replaced"],
+  [/\brepalced\b/gi, "replaced"],
+  [/\bcabels?\b/gi, (match) => match.toLowerCase().endsWith("s") ? "cables" : "cable"],
+  [/\bconection\b/gi, "connection"],
+  [/\bconnetion\b/gi, "connection"],
+  [/\bconnecton\b/gi, "connection"],
+  [/\bmotar\b/gi, "motor"],
 ];
 
 const STOP_WORDS = new Set([
@@ -54,6 +66,7 @@ export function cleanTechnicalText(value) {
     .replace(/\s+([,.;:!?])/g, "$1")
     .replace(/([,.;:!?])([^\s])/g, "$1 $2")
     .replace(/\bi\b/g, "I")
+    .replace(/\b([uvw])\s+(terminal|connection|phase)\b/gi, (_, phase, label) => `${phase.toUpperCase()} ${label.toLowerCase()}`)
     .trim();
   return text;
 }
@@ -62,6 +75,13 @@ export function sentenceCase(value) {
   const text = cleanTechnicalText(value);
   if (!text) return "";
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function technicalNounPhrase(value) {
+  return cleanTechnicalText(value)
+    .split(/\s+/)
+    .map((word) => (/^[A-Z0-9/\-]{2,}$/.test(word) ? word : word.toLowerCase()))
+    .join(" ");
 }
 
 export function limitSentences(value, maxSentences = 2) {
@@ -85,6 +105,15 @@ export function expandVagueIssue(raw, machineName = "") {
 
   const machine = cleanTechnicalText(machineName).replace(/[.!?]+$/g, "");
   const machineSubject = machine ? sentenceCase(machine) : "The machine";
+
+  const motorTerminalMatch = text.match(/\b(?:bad|faulty|failed|defective)?\s*motor\b.*?\b([uvw])(?:\s*(?:terminal|connection|phase))?\b/i);
+  if (motorTerminalMatch) {
+    const phase = motorTerminalMatch[1].toUpperCase();
+    const subject = machine
+      ? `The ${technicalNounPhrase(machine).replace(/[.!?]+$/g, "")} motor`
+      : "The motor";
+    return ensurePeriod(`${subject} was not operating as required, and the reported condition was associated with the ${phase}-terminal electrical connection. This prevented reliable motor operation during the machine cycle.`);
+  }
 
   const exactRules = [
     [/^(bad|faulty|failed|defective) cables?$/, "One or more equipment cables were not providing a reliable electrical connection. This created an unstable electrical path within the affected machine circuit."],
@@ -179,9 +208,17 @@ function formatIssue(raw, machineName = "") {
   return ensurePeriod(text);
 }
 
-function formatReason(raw) {
+function findMotorTerminal(...values) {
+  const text = cleanTechnicalText(values.filter(Boolean).join(" "));
+  const match = text.match(/\b([uvw])(?:\s*[- ]?\s*(?:terminal|connection|phase))\b/i);
+  return match ? match[1].toUpperCase() : "";
+}
+
+function formatReason(raw, context = {}) {
   let text = cleanTechnicalText(raw);
   const lower = text.toLowerCase().replace(/[.!?]+$/g, "");
+  const terminal = findMotorTerminal(context.issue, raw);
+  const terminalLocation = terminal ? ` at the motor's ${terminal}-terminal connection` : "";
   const rules = [
     [/^(bad|faulty|failed|defective) cables?$/, "The affected cable was not providing reliable electrical continuity."],
     [/^loose (cable|connector|connection)$/, "A loose electrical connection caused an intermittent signal or power path."],
@@ -195,6 +232,22 @@ function formatReason(raw) {
   for (const [pattern, replacement] of rules) {
     if (pattern.test(lower)) return ensurePeriod(replacement);
   }
+
+  const colorCableWire = lower.match(/^(?:bad|faulty|failed|defective|damaged|broken)\s+(?:wire|conductor)\s+(?:on|in|at)\s+(?:the\s+)?([a-z]+)\s+cable$/i);
+  if (colorCableWire) {
+    return ensurePeriod(`A defective conductor was identified in the ${colorCableWire[1]} cable${terminalLocation}.`);
+  }
+
+  const badWire = lower.match(/^(?:bad|faulty|failed|defective|damaged|broken)\s+(?:wire|conductor)$/i);
+  if (badWire) {
+    return ensurePeriod(`A defective conductor was identified in the affected cable${terminalLocation}.`);
+  }
+
+  const looseColorCable = lower.match(/^loose\s+(?:wire|conductor|connection)\s+(?:on|in|at)\s+(?:the\s+)?([a-z]+)\s+cable$/i);
+  if (looseColorCable) {
+    return ensurePeriod(`A loose conductor connection was identified in the ${looseColorCable[1]} cable${terminalLocation}.`);
+  }
+
   if (/^jam\s+(on|at|in)\b/i.test(text)) {
     text = text.replace(/^jam\s+(on|at|in)\s+/i, "A jam was present at the ");
   } else if (/^a jam\s+(on|at|in)\b/i.test(text)) {
@@ -218,6 +271,8 @@ function formatWork(raw) {
     [/^reset clutch$/, "Reset the clutch to the correct indexed position."],
     [/^(cleared|removed) jam$/, "Cleared the mechanical jam and restored free movement of the affected mechanism."],
     [/^reset machine$/, "Reset the machine control sequence."],
+    [/^(replaced|changed) (?:the )?(?:complete|entire|whole) motor$/, "Removed the existing motor and installed a complete replacement motor assembly."],
+    [/^(replaced|changed) (?:the )?motor$/, "Removed the existing motor and installed a replacement motor assembly."],
   ];
   for (const [pattern, replacement] of rules) {
     if (pattern.test(lower)) return ensurePeriod(replacement);
@@ -232,7 +287,7 @@ function formatWork(raw) {
 
 export function fallbackGenerate(input) {
   const issue = formatIssue(input.issue, input.machine_name);
-  const reason = input.reason ? formatReason(input.reason) : null;
+  const reason = input.reason ? formatReason(input.reason, input) : null;
   const workPerformed = input.work_performed ? formatWork(input.work_performed) : null;
   let results = null;
   if (input.result_confirmed) {
@@ -303,7 +358,16 @@ export function parseAIResult(result) {
   if (!content) throw new Error("AI response did not contain text");
 
   const stripped = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
-  return JSON.parse(stripped);
+  try {
+    return JSON.parse(stripped);
+  } catch {
+    const firstBrace = stripped.indexOf("{");
+    const lastBrace = stripped.lastIndexOf("}");
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      return JSON.parse(stripped.slice(firstBrace, lastBrace + 1));
+    }
+    throw new Error("AI response was not valid JSON");
+  }
 }
 
 export function enforceGeneratedOutput(output, input) {
@@ -315,7 +379,7 @@ export function enforceGeneratedOutput(output, input) {
 
   let reason = output.reason ? ensurePeriod(output.reason) : null;
   let workPerformed = output.work_performed ? ensurePeriod(output.work_performed) : null;
-  if (input.reason && reason && looksUnhelpfullyVague(reason, input.reason)) reason = formatReason(input.reason);
+  if (input.reason && reason && looksUnhelpfullyVague(reason, input.reason)) reason = formatReason(input.reason, input);
   if (input.work_performed && workPerformed && looksUnhelpfullyVague(workPerformed, input.work_performed)) workPerformed = formatWork(input.work_performed);
 
   const cleaned = {

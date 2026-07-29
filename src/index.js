@@ -95,6 +95,21 @@ const OUTPUT_SCHEMA = {
   additionalProperties: false,
 };
 
+// Cloudflare JSON Mode is available only on specific models. GLM-4.7-Flash
+// accepts chat messages but is not currently listed as a JSON Mode model, so
+// sending response_format to it can cause the inference request to fail.
+const JSON_MODE_MODELS = new Set([
+  "@cf/meta/llama-3.1-8b-instruct-fast",
+  "@cf/meta/llama-3.1-70b-instruct",
+  "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+  "@cf/meta/llama-3-8b-instruct",
+  "@cf/meta/llama-3.1-8b-instruct",
+  "@cf/meta/llama-3.2-11b-vision-instruct",
+  "@hf/nousresearch/hermes-2-pro-mistral-7b",
+  "@hf/thebloke/deepseek-coder-6.7b-instruct-awq",
+  "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+]);
+
 async function generateWithAI(env, input) {
   if (!env.AI) throw new Error("Workers AI binding is not configured");
   const model = env.AI_MODEL || "@cf/zai-org/glm-4.7-flash";
@@ -111,6 +126,15 @@ Rules:
 - When only a component and a general failure word are supplied, describe the component's failed or unreliable normal function without inventing a specific root cause.
 - Example: "bad cables" becomes "One or more equipment cables were not providing a reliable electrical connection. This created an unstable electrical path within the affected machine circuit."
 - Example: "bad encoder" becomes "The encoder was not providing reliable position feedback to the control system. The controller could not consistently verify the associated machine position or movement."
+- Example using all confirmed fields:
+  Machine: "Conveyor"
+  Issue: "bad motor on U connection"
+  Reason: "bad wire on blue cable"
+  Work performed: "replaced complete motor"
+  Rewrite as:
+  Issue: "The conveyor motor was not operating as required, and the reported condition was associated with the U-terminal electrical connection. This prevented reliable motor operation during the machine cycle."
+  Reason: "A defective conductor was identified in the blue cable at the motor's U-terminal connection."
+  Work performed: "Removed the existing motor and installed a complete replacement motor assembly."
 - Improve short Reason and Work performed notes into complete technical sentences, but preserve exactly what was confirmed and never add an action or cause that was not supplied.
 - Keep each field to one or two complete sentences.
 - Never invent a root cause, repair, test, adjustment, production impact, or successful result.
@@ -119,7 +143,8 @@ Rules:
 - If machine operation was not confirmed, Results must be null.
 - Do not mention product names, part/product identifiers, lots, batches, quantities, recalls, rejects, scrap, patients, customers, operators, or quality disposition.
 - Use professional equipment-maintenance terminology that a maintenance manager can understand.
-- Return only the requested JSON structure.`;
+- Return only a valid JSON object with these exact keys: issue, reason, work_performed, results, missing_information, prohibited_information_detected.
+- Do not wrap the JSON in Markdown or explanatory text.`;
 
   const user = JSON.stringify({
     machine_or_equipment: input.machine_name || null,
@@ -130,18 +155,23 @@ Rules:
     confirmed_result_note: input.result_notes || null,
   });
 
-  const raw = await env.AI.run(model, {
+  const request = {
     messages: [
       { role: "system", content: system },
       { role: "user", content: user },
     ],
-    response_format: {
+    temperature: 0.1,
+    max_completion_tokens: 900,
+  };
+
+  if (JSON_MODE_MODELS.has(model)) {
+    request.response_format = {
       type: "json_schema",
       json_schema: OUTPUT_SCHEMA,
-    },
-    temperature: 0.1,
-    max_completion_tokens: 500,
-  });
+    };
+  }
+
+  const raw = await env.AI.run(model, request);
   const parsed = parseAIResult(raw);
   parsed.generation_mode = "cloudflare-ai";
   return enforceGeneratedOutput(parsed, input);
