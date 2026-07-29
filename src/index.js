@@ -103,13 +103,17 @@ Rewrite only the technician-confirmed facts into concise technical maintenance l
 Return Issue, Reason, Work performed, and Results.
 Rules:
 - Correct spelling and grammar.
+- Rewrite vague technician shorthand into clear, manager-friendly technical language.
+- Do not merely repeat phrases such as "bad cables," "bad encoder," "bad sensor," "motor issue," "machine down," or "not working."
+- When only a component and a general failure word are supplied, describe the component's failed or unreliable normal function without inventing a specific cause.
+- Examples: "bad cables" means an equipment cable was not providing a reliable electrical connection; "bad encoder" means the encoder was not providing reliable position feedback; "bad sensor" means the sensor was not providing a reliable detection signal.
 - Keep each field to one sentence when possible and never more than two sentences.
-- Never invent a root cause, repair, test, adjustment, or successful result.
+- Never invent a root cause, repair, test, adjustment, production impact, or successful result.
 - If Reason was not supplied, return null.
 - If Work performed was not supplied, return null.
 - If machine operation was not confirmed, Results must be null.
 - Do not mention product names, part/product identifiers, lots, batches, quantities, recalls, rejects, scrap, patients, customers, operators, or quality disposition.
-- Use professional equipment-maintenance terminology.
+- Use professional equipment-maintenance terminology that a maintenance manager can understand.
 - Return only the requested JSON structure.`;
 
   const user = JSON.stringify({

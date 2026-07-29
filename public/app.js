@@ -186,6 +186,12 @@ async function generate() {
 }
 
 function renderOutput(result) {
+  const usedAI = result.generation_mode === "cloudflare-ai";
+  el("generationMode").textContent = usedAI
+    ? "Rewritten by Cloudflare Workers AI."
+    : "Rewritten by the built-in technical formatter because Workers AI was unavailable.";
+  show("generationMode", true);
+
   el("issueOutput").value = result.issue || "";
   el("reasonOutput").value = result.reason || "";
   el("workOutput").value = result.work_performed || "";
@@ -346,6 +352,7 @@ function clearForm() {
   setAlert("saveAlert");
   show("suggestions", false);
   show("outputFields", false);
+  show("generationMode", false);
   show("emptyState", true);
   el("copyAllBtn").disabled = true;
 }

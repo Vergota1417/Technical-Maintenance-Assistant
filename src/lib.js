@@ -77,7 +77,59 @@ export function ensurePeriod(value) {
   return /[.!?]$/.test(text) ? text : `${text}.`;
 }
 
-function formatIssue(raw) {
+
+export function expandVagueIssue(raw, machineName = "") {
+  const original = cleanTechnicalText(raw);
+  const text = original.toLowerCase().replace(/[.!?]+$/g, "").trim();
+  if (!text) return "";
+
+  const machine = cleanTechnicalText(machineName).replace(/[.!?]+$/g, "");
+  const machineSubject = machine ? sentenceCase(machine) : "The machine";
+
+  const exactRules = [
+    [/^(bad|faulty|failed|defective) cables?$/, "One or more equipment cables were not providing a reliable electrical connection."],
+    [/^(cable|cables) (issue|problem|fault)$/, "One or more equipment cables were not providing a reliable electrical connection."],
+    [/^loose cables?$/, "One or more equipment cable connections were loose and could not provide a reliable electrical connection."],
+    [/^(broken|damaged) cables?$/, "One or more equipment cables had a physical failure that interrupted the electrical connection."],
+    [/^(bad|faulty|failed|defective) encoder$/, "The encoder was not providing reliable position feedback to the control system."],
+    [/^encoder (issue|problem|fault)$/, "The encoder was not providing reliable position feedback to the control system."],
+    [/^(bad|faulty|failed|defective) (sensor|prox|proximity sensor)$/, "The sensor was not providing a reliable detection signal to the control system."],
+    [/^(sensor|prox|proximity sensor) (issue|problem|fault)$/, "The sensor was not providing a reliable detection signal to the control system."],
+    [/^(bad|faulty|failed|defective) (photoeye|photo eye|photoelectric sensor)$/, "The photoelectric sensor was not providing a reliable target-detection signal."],
+    [/^(bad|faulty|failed|defective) motor$/, "The motor was not operating as required during the machine cycle."],
+    [/^motor (issue|problem|fault)$/, "The motor was not operating as required during the machine cycle."],
+    [/^(bad|faulty|failed|defective) servo$/, "The servo system was not maintaining the required motion or position control."],
+    [/^servo (issue|problem|fault)$/, "The servo system was not maintaining the required motion or position control."],
+    [/^(bad|faulty|failed|defective) solenoid$/, "The solenoid was not actuating as required during the machine sequence."],
+    [/^(bad|faulty|failed|defective) valve$/, "The valve was not actuating as required during the machine sequence."],
+    [/^(bad|faulty|failed|defective) hmi$/, "The HMI was not responding or operating as required."],
+    [/^(machine down|machine not working|not working|stopped working)$/, `${machineSubject} was unable to complete its normal operating sequence.`],
+    [/^(machine jam|machine jammed|jammed)$/, `${machineSubject} was unable to complete its normal operating sequence due to a mechanical jam.`],
+  ];
+
+  for (const [pattern, replacement] of exactRules) {
+    if (pattern.test(text)) return ensurePeriod(replacement);
+  }
+
+  const genericBadComponent = text.match(/^(?:bad|faulty|failed|defective)\s+([a-z0-9][a-z0-9 /_-]{1,45})$/i);
+  if (genericBadComponent) {
+    const component = genericBadComponent[1].replace(/\s+/g, " ").trim();
+    return ensurePeriod(`The ${component} was not operating as required.`);
+  }
+
+  return "";
+}
+
+function looksUnhelpfullyVague(value) {
+  const text = cleanTechnicalText(value).toLowerCase().replace(/[.!?]+$/g, "").trim();
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length > 7) return false;
+  return /\b(bad|faulty|failed|defective|issue|problem|not working|machine down)\b/i.test(text);
+}
+
+function formatIssue(raw, machineName = "") {
+  const expanded = expandVagueIssue(raw, machineName);
+  if (expanded) return expanded;
   let text = cleanTechnicalText(raw);
   text = text
     .replace(/\bindex machine\b/gi, "indexing machine")
@@ -111,7 +163,7 @@ function formatWork(raw) {
 }
 
 export function fallbackGenerate(input) {
-  const issue = formatIssue(input.issue);
+  const issue = formatIssue(input.issue, input.machine_name);
   const reason = input.reason ? formatReason(input.reason) : null;
   const workPerformed = input.work_performed ? formatWork(input.work_performed) : null;
   let results = null;
@@ -187,8 +239,14 @@ export function parseAIResult(result) {
 }
 
 export function enforceGeneratedOutput(output, input) {
+  const expandedInputIssue = expandVagueIssue(input.issue, input.machine_name);
+  let issue = ensurePeriod(output.issue || input.issue);
+  if (expandedInputIssue && (looksUnhelpfullyVague(issue) || cleanTechnicalText(issue).toLowerCase() === cleanTechnicalText(input.issue).toLowerCase())) {
+    issue = expandedInputIssue;
+  }
+
   const cleaned = {
-    issue: ensurePeriod(output.issue || input.issue),
+    issue,
     reason: output.reason ? ensurePeriod(output.reason) : null,
     work_performed: output.work_performed ? ensurePeriod(output.work_performed) : null,
     results: output.results ? ensurePeriod(output.results) : null,
